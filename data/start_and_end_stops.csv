@@ -1,0 +1,8 @@
+stop_id,stop_code,stop_name,stop_desc,stop_lat,stop_lon,zone_id,stop_url,location_type,parent_station,platform_code
+1797,1797,"UQ Chancellor's Place, zone D",,-27.497974,153.011139,1,http://translink.com.au/stop/001797/gtfs/,0,place_INTUQ,D
+1798,1798,"UQ Chancellor's Place, zone C",,-27.498139,153.011102,1,http://translink.com.au/stop/001798/gtfs/,0,place_INTUQ,C
+1799,1799,"UQ Chancellor's Place, zone B",,-27.498301,153.011068,1,http://translink.com.au/stop/001799/gtfs/,0,place_INTUQ,B
+1801,1801,"UQ Chancellor's Place, zone A",,-27.498448,153.011036,1,http://translink.com.au/stop/001801/gtfs/,0,place_INTUQ,A
+1802,1802,"UQ Chancellor's Place, zone E",,-27.497798,153.01117,1,http://translink.com.au/stop/001802/gtfs/,0,place_INTUQ,E
+2004,2004,Indooroopilly interchange,,-27.500941,152.971946,1-Feb,http://translink.com.au/stop/002004/gtfs/,0,place_INTIND,
+2205,2205,"Station Rd at Indooroopilly Shopping Ctr, stop E",,-27.501617,152.971881,1-Feb,http://translink.com.au/stop/002205/gtfs/,0,,
