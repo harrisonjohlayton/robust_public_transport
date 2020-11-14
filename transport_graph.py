@@ -17,7 +17,8 @@ class Stop():
         self.people = []
     
     def __str__(self):
-        return str(self.id)
+        # return str(f'{self.name}, lat:{self.lat}, lon:{self.lon}')
+        return str(f'{self.id}')
 
 
 class Connection():
@@ -26,15 +27,15 @@ class Connection():
     edge in the graph.
     '''
 
-    def __init__(self, stop_1, stop_2, weight:int):
+    def __init__(self, stop_1, stop_2, time:int):
         self.stop_1 = stop_1
         self.stop_2 = stop_2
         self.altitude = get_altitude((stop_1.lat + stop_2.lat)/2,
             (stop_1.lon + stop_2.lon)/2)
-        self.weight=weight
+        self.time=time
 
     def __str__(self):
-        return f'{self.stop_1} <- {self.weight}s -> {self.stop_2}'
+        return f'{self.stop_1} <- {self.time}s -> {self.stop_2}'
 
 class Route():
     '''
@@ -90,12 +91,12 @@ class Network():
     '''
 
     def __init__(self, disaster_resistant=False):
-        self.stops = []
+        self.disaster_resistant = disaster_resistant
+        self.chancellors_place = Stop(1799, 'Chancellors Place', -27.497974, 153.011139)
+        self.indooroopilly_interchange = Stop(2205, 'Indooroopilly Shopping Center', -27.500941, 152.971946)
         self.connections = []
         self.routes = []
-        self.disaster_resistant = disaster_resistant
-        self.chancellors_place = Stop(1799, 'Chancellors Place', 0, 0)
-        self.indooroopilly_interchange = Stop(2205, 'Indooroopilly Shopping Center', 0, 0)
+        self.stops = [self.indooroopilly_interchange, self.chancellors_place]
 
         #add routes
         self.add_route('data/raw_data/route_414.csv', 414)
@@ -150,6 +151,17 @@ class Network():
             elif (connection.stop_2 == stop_1 and connection.stop_1 == stop_2):
                 return True
         return False
+    
+    def get_connections_for_stop(self, stop):
+        '''
+        return all connections for a given stop
+        '''
+        relevant_connections = []
+        for connection in self.connections:
+            if (connection.stop_1 == stop or connection.stop_2 == stop):
+                relevant_connections.append(connection)
+        return relevant_connections
+
     
     def __str__(self):
         return_str = 'Routes\n'
