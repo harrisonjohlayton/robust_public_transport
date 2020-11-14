@@ -8,7 +8,7 @@ def read_route_file(route_filename):
     '''
     ID = 0
     NAME = 1
-    TIME = 2
+    TIME = 3
     in_fd = open(route_filename, 'r')
     lines = in_fd.readlines()
     
@@ -21,7 +21,8 @@ def read_route_file(route_filename):
         words = line.split(',')
         stop_dict['id'] = int(words[ID])
         stop_dict['name'] = words[NAME]
-        stop_dict['time'] = float(words[TIME])
+        #convert time from minutes to seconds
+        stop_dict['time'] = int(float(words[TIME])*60)
         route_data.append(stop_dict)
     
     return get_stop_positions(route_data)
@@ -31,8 +32,8 @@ def get_stop_positions(route_data):
     read lat and long data for stops from file
     '''
     ID = 0
-    LAT = 4
-    LON = 5
+    LAT = -7
+    LON = -6
 
     todo_ids = []
     for stop_dict in route_data:
@@ -53,11 +54,17 @@ def get_stop_positions(route_data):
                 todo_ids.remove(next_id)
                 for stop_dict in route_data:
                     if (stop_dict['id'] == next_id):
-                        stop_dict['lat'] = words[LAT]
-                        stop_dict['lon'] = words[LON]
+                        stop_dict['lat'] = float(words[LAT])
+                        stop_dict['lon'] = float(words[LON])
                         break
         except ValueError:
+            # print('error parsing stop posistions')
+            # print(f'id: {words[ID]}')
+            # print(f'lat: {words[LAT]}')
+            # print(f'lon: {words[LON]}')
+            # exit(0)
             continue
+
     
     return route_data
 
