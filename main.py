@@ -23,9 +23,9 @@ def export_stops_csv(network, outfile):
 
 if __name__ == '__main__':
     network = Network()
-    print(network)
-    input('hi')
+    # print(network)
+    # input('hi')
     gui = SimulationGUI(network)
-    input('hi')
+    input('Press Enter to close...')
     # export_stops_csv(network, 'stops.csv')
     # export_connections_csv(network, 'connections.csv')

@@ -1,4 +1,4 @@
-from utils import get_altitude, read_route_file
+from utils import get_elevation, read_route_file, read_connections_file, read_stop_file, cache_elevations
 
 CHANCELLORS_PLACE_IDS = [1798, 1799, 1801]
 INDOOROOPILLY_IDS = [2004, 2205]
@@ -13,7 +13,7 @@ class Stop():
         self.name = name
         self.lat = lat
         self.lon = lon
-        self.altitude = get_altitude(lat, lon)
+        self.elevation = get_elevation(lat, lon, True, self.id, None)
         self.people = []
     
     def __str__(self):
@@ -30,8 +30,10 @@ class Connection():
     def __init__(self, stop_1, stop_2, time:int):
         self.stop_1 = stop_1
         self.stop_2 = stop_2
-        self.altitude = get_altitude((stop_1.lat + stop_2.lat)/2,
-            (stop_1.lon + stop_2.lon)/2)
+
+        self.elevation = get_elevation((stop_1.lat + stop_2.lat)/2,
+            (stop_1.lon + stop_2.lon)/2, False, stop_1.id, stop_2.id)
+
         self.time=time
 
     def __str__(self):
@@ -98,38 +100,80 @@ class Network():
         self.routes = []
         self.stops = [self.indooroopilly_interchange, self.chancellors_place]
 
-        #add routes
-        self.add_route('data/raw_data/route_414.csv', 414)
-        self.add_route('data/raw_data/route_427.csv', 427)
-        self.add_route('data/raw_data/route_428.csv', 428)
-        self.add_route('data/raw_data/route_432.csv', 432)
+        #add stops, connections and routes
+        self.init_stops()
+        self.init_connections()
+        self.add_route(414)
+        self.add_route(427)
+        self.add_route(428)
+        self.add_route(432)
+
+        #cache elevations to save expensive call
+        cache_elevations()
+        
     
-    def add_route(self, route_filename:str, route_num:int):
+    def init_stops(self):
+        '''
+        add stops to graph
+        '''
+        stops_data = read_stop_file()
+        for stop_data in stops_data:
+            self.stops.append(Stop(stop_data['id'], stop_data['name'], stop_data['lat'], stop_data['lon']))
+    
+    def init_connections(self):
+        '''
+        add connections to graph
+        '''
+        connections_data = read_connections_file()
+        for connection_data in connections_data:
+            stop_1 = self.get_stop(connection_data[0])
+            for i in range(1, len(connection_data)):
+                stop_2 = self.get_stop(connection_data[i][0])
+                if (self.is_connected(stop_1, stop_2)):
+                    #don't load connections twice
+                    continue
+                time = connection_data[i][1]
+                self.connections.append(Connection(stop_1, stop_2, time))
+
+    
+    def add_route(self, route_num:int):
         '''
         add the route definied by the file to the graph
         '''
         #get route data from file
-        route_data = read_route_file(route_filename)
+        route_data = read_route_file(route_num)
         route = Route(route_num, self.chancellors_place, self)
 
         #add stops to route
         for i in range(len(route_data)-1):
             stop_dict = route_data[i]
             next_stop =  self.get_stop(stop_dict['id'])
-            if (next_stop is None):
-                next_stop = Stop(stop_dict['id'], stop_dict['name'], stop_dict['lat'], stop_dict['lon'])
-                self.stops.append(next_stop)
-            if (not self.is_connected(next_stop, route.required_stops[-1])):
-                self.connections.append(Connection(next_stop, route.required_stops[-1], stop_dict['time']))
             route.add_required_stop(next_stop)
 
-        #add final stop to route
-        if (not self.is_connected(route.required_stops[-1], self.indooroopilly_interchange)):
-            self.connections.append(Connection(self.indooroopilly_interchange,
-                    route.required_stops[-1], route_data[-1]['time']))
         route.add_required_stop(self.indooroopilly_interchange)
-
         self.routes.append(route)
+        # #get route data from file
+        # route_data = read_route_file(route_filename)
+        # route = Route(route_num, self.chancellors_place, self)
+
+        # #add stops to route
+        # for i in range(len(route_data)-1):
+        #     stop_dict = route_data[i]
+        #     next_stop =  self.get_stop(stop_dict['id'])
+        #     if (next_stop is None):
+        #         next_stop = Stop(stop_dict['id'], stop_dict['name'], stop_dict['lat'], stop_dict['lon'])
+        #         self.stops.append(next_stop)
+        #     if (not self.is_connected(next_stop, route.required_stops[-1])):
+        #         self.connections.append(Connection(next_stop, route.required_stops[-1], stop_dict['time']))
+        #     route.add_required_stop(next_stop)
+
+        # #add final stop to route
+        # if (not self.is_connected(route.required_stops[-1], self.indooroopilly_interchange)):
+        #     self.connections.append(Connection(self.indooroopilly_interchange,
+        #             route.required_stops[-1], route_data[-1]['time']))
+        # route.add_required_stop(self.indooroopilly_interchange)
+
+        # self.routes.append(route)
 
     
     def get_stop(self, id):
@@ -139,6 +183,7 @@ class Network():
         for stop in self.stops:
             if stop.id == id:
                 return stop
+        print(f'No stop with id: {id}')
         return None
     
     def is_connected(self, stop_1, stop_2):
