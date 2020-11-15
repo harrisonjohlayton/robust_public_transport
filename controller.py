@@ -24,10 +24,11 @@ class NetworkController():
         '''
         get the maximum time per trip before pruning from search tree
         '''
-        time_sum = 0
-        for connection in self.network.connections:
-            time_sum += connection.time
-        return time_sum*2
+        # time_sum = 0
+        # for connection in self.network.connections:
+        #     time_sum += connection.time
+        # return time_sum*2
+        return 37*60
 
     def update(self):
         self.current_time += self.seconds_per_tick
@@ -108,17 +109,32 @@ class NetworkController():
     def optimal_walk_search(self, route, time):
         '''
         search for the optimum walk for the given route starting at the given timestep
+        TODO:
+            run dikstras to find shortest route between all points
+            add heruistic - time from current stop to furthest unvisited required stop
+            add to pruning - current time + heuristic > max time?
+            tune max time - initial time for each route + 10 minutes
+            go through and check that everything is running snappy (probs isn't too bad since paths are fine)
+            
+            if this still isn't enough, require that indooroopilly is the final stop
+                heuristic = time to furthest univisited required stop + time from that stop to
+                            indooroopilly
         '''
+        
         CURRENT_STOP=0
         TIME=1
         WALK=2
         #nodes take the form [current_stop, current_time, stops_visited_in_order (first to last)]
-        root_node = [self.network.chancellors_place, time, [self.network.chancellors_place]]
+        root_node = [self.network.chancellors_place, time, []]
         node_list = [root_node]
 
         while(len(node_list) > 0):
             # print(len(node_list[-1][WALK]))
             node = node_list.pop(0)
+
+            #check if walk is complete
+            if (self.is_walk_complete(node[WALK], route)):
+                return node[WALK]
             
             #make new node for each connection
             prev_stop = node[CURRENT_STOP]
@@ -128,8 +144,8 @@ class NetworkController():
                 else:
                     next_stop = connection.stop_1
                 
-                if (next_stop in node[WALK]):
-                    continue
+                # if (connection in node[WALK]):
+                #     continue
                 
                 #check the step is valid, get next time and check if time is over max
                 valid, next_time = self.is_step_valid(prev_stop, next_stop, connection, node[TIME])
@@ -138,18 +154,15 @@ class NetworkController():
                 
                 #get new walk
                 next_walk = node[WALK].copy()
-                next_walk.append(next_stop)
-                if (self.is_walk_suboptimal(next_walk, next_stop)):
+                next_walk.append(connection)
+                if (self.is_walk_suboptimal(next_walk, connection)):
                     # print('subopt')
                     continue
-
-                #check if walk is complete
-                if (self.is_walk_complete(next_walk, route)):
-                    return next_walk
                 
                 #append new node to open list
                 node_list.append([next_stop, next_time, next_walk])
             node_list.sort(key=lambda x: x[TIME])
+            # print(len(node_list))
             # if (len(node_list) > 10):
             #     for node in node_list:
             #         print(f'{node[TIME]}')
@@ -158,20 +171,24 @@ class NetworkController():
             #     exit(0)
         return None
     
-    def is_walk_suboptimal(self, walk, stop):
+    def is_walk_suboptimal(self, walk, connection):
         '''
         checks to see if the walk is suboptimal on the given stop
         '''
-        num_occurances = walk.count(stop)
-        max_num_occurances = len(self.network.get_connections_for_stop(stop))
-        return num_occurances > max_num_occurances
+        num_occurances = walk.count(connection)
+        # max_num_occurances = len(self.network.get_connections_for_stop(stop))
+        return num_occurances > 2
 
     def is_walk_complete(self, walk, route):
         '''
         return True if the walk contains all stops in the routes required_stops
         '''
+        stops = []
+        for connection in walk:
+            stops.append(connection.stop_1)
+            stops.append(connection.stop_2)
         for stop in route.required_stops:
-            if stop in walk:
+            if stop in stops:
                 continue
             return False
         return True
@@ -181,11 +198,12 @@ class NetworkController():
         '''
         test if a walk is valid starting at the given time
         '''
-        for i in range(1, len(walk)):
-            connection = self.network.get_connection(walk[i-1], walk[i])
-            valid, time = self.is_step_valid(walk[i-1], walk[i], connection, time)
-            if ((not valid) or (time > self.max_time_per_walk)):
-                return False
+        #REPLACE WITH CONNECTION
+        # for connection in walk):
+        #     # connection = self.network.get_connection(walk[i-1], walk[i])
+        #     valid, time = self.is_step_valid(walk[i-1], walk[i], connection, time)
+        #     if ((not valid) or (time > self.max_time_per_walk)):
+        #         return False
         return True
     
 
@@ -197,7 +215,6 @@ class NetworkController():
         assumes its valid for the bus to be at the start stop for the given 
         start_time
         '''
-        connection = self.network.get_connection(start_stop, end_stop)
         end_time = time + connection.time
         end_water_level = self.get_water_level_for_time(end_time)
         if ((connection.elevation <= end_water_level) or

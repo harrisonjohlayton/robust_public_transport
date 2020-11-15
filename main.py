@@ -25,8 +25,8 @@ from time import sleep
 def show_walks_for_routes(controller):
     for route in controller.prev_optimal_walks.keys():
         print(f'ROUTE {route.route_num}')
-        for stop in controller.prev_optimal_walks[route]:
-            print(f'\t{stop.id}')
+        for connection in controller.prev_optimal_walks[route]:
+            print(f'\t{connection.stop_1.id}, {connection.stop_2.id}')
 
 def show_sorted_elevations(network):
     print('STOPS')
