@@ -5,6 +5,7 @@ from transport_graph import Network, Stop, Connection
 CONNECTION_WIDTH = 2
 CONNECTION_UP_COLOR = '#090'
 CONNECTION_DOWN_COLOR = '#900'
+
 STOP_RADIUS = 20
 STOP_WIDTH = 20
 STOP_HEIGHT = 8
@@ -13,6 +14,7 @@ STOP_COLOR = '#00f'
 START_STOP_COLOR = '#990'
 END_STOP_COLOR = '#099'
 STOP_TEXT_COLOR = 'white'
+STOP_DOWN_COLOR = '#900'
 
 
 class SimulationGUI:
@@ -119,6 +121,51 @@ class SimulationGUI:
         convert from latitude to y position in graph
         '''
         return math.floor(self.height - self.buffer - ((lat - self.lat_offset)*self.lat_lon_scalar))
+    
+    def update(self, current_water_level):
+        '''
+        update the view to reflect the new graph
+        '''
+        self.update_stops(current_water_level)
+        self.update_connections(current_water_level)
+        self.update_buses()
+        self.canvas.update()
+    
+    def update_stops(self, current_water_level):
+        '''
+        update the stops for new tick
+        '''
+        for stop in self.stop_dict.keys():
+            self.update_stop(stop, current_water_level)
+    
+    def update_stop(self, stop, current_water_level):
+        #if stop is above water and at least one connection is above water, return
+        if stop.elevation > current_water_level:
+            for connection in self.network.get_connections_for_stop(stop):
+                if connection.elevation > current_water_level:
+                    return
+        rect = self.stop_dict[stop][0]
+        self.canvas.itemconfig(rect, fill=STOP_DOWN_COLOR)
+
+
+    def update_connections(self, current_water_level):
+        '''
+        update connections for new tick
+        '''
+        for connection in self.connection_dict.keys():
+            if ((connection.stop_1.elevation <= current_water_level) or
+                    (connection.stop_2.elevation <= current_water_level) or 
+                    (connection.elevation <= current_water_level)):
+                line = self.connection_dict[connection]
+                self.canvas.itemconfig(line, fill=CONNECTION_DOWN_COLOR, dash=(5,5))
+                
+
+
+    def update_buses(self):
+        '''
+        update buses for new tick
+        '''
+        pass
 
 
     
