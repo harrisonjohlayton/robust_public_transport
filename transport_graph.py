@@ -15,6 +15,7 @@ class Stop():
         self.lon = lon
         self.elevation = get_elevation(lat, lon, True, self.id, None)
         self.people = []
+        self.passengers = []
         # self.is_flooded = False
     
     def __str__(self):
@@ -59,14 +60,54 @@ class Route():
     def add_required_stop(self, stop):
         self.required_stops.append(stop)
     
-            
     def __str__(self):
         return str(self.route_num)
     
 
-# class Passenger():
+class Passenger():
 
-#     def __init__(self, origin_stop, dest_stop):
+    def __init__(self, route, dest_stop):
+        self.route = route
+        #determined in realtime
+        self.bus = None
+        self.dest_stop = dest_stop
+        #best stop they can get to given current flooding
+        self.non_preffered_dest_stop = None
+
+        self.departed = False
+        self.arrived = False
+        self.stop_arrived_at = None
+    
+    def depart(self, controller, bus):
+        '''
+        get on the bus, if you can't make it to your preffered stop, make it
+        to the next best one
+        '''
+        self.bus = bus
+        self.bus.passengers.append(self)
+
+        if (not(self.dest_stop in self.bus.stops_visited_on_walk)):
+            #find non-prefferred stop
+            best_stop = None
+            best_time = 5e10
+            for stop in self.bus.stops_visited_on_walk:
+                next_time = controller.shortest_paths[self.dest_stop][stop]
+                if (next_time < best_time):
+                    best_stop = stop
+                    best_time = next_time
+            self.non_preffered_dest_stop = best_stop
+    
+    def visit_stop(self, stop):
+        '''
+        if the stop is your destination, get off
+        if the stop is your next best destination, get off
+        '''
+        if (stop == self.dest_stop):
+            self.bus.passengers.remove(self)
+            self.arrived = True
+        elif ((not(self.non_preffered_dest_stop is None)) and (stop == self.non_preffered_dest_stop)):
+            self.bus.passengers.remove(self)
+            self.arrived = True
 
 class Bus():
     
@@ -74,6 +115,100 @@ class Bus():
         self.route = route
         self.departure_time = departure_time
         self.passengers = []
+        self.capacity = 50
+
+        self.walk = None
+        self.stops_visited_on_walk = None
+        self.time_at_last_stop = 0
+        self.lat = 0
+        self.lon = 0
+
+        self.departed = False
+        self.done = False
+
+    def update(self, controller, current_time):
+        '''
+        if the bus is on route, update the bus
+
+        must be able to handle the bus passing several stops in a single tick
+        '''
+        pass
+        if (self.done):
+            return
+        elif (self.departed):
+            self.update_journey(controller, current_time)
+        elif (self.departure_time >= current_time):
+            self.depart(controller, current_time)
+    
+    def depart(self, controller, current_time):
+        '''
+        depart the start stop
+        '''
+        self.departed = True
+        #shallow copy so we can alter list
+        self.walk = controller.get_optimal_walk(self.route, self.departure_time).copy()
+
+        #case where no walk is possible
+        if (self.walk is None):
+            self.done = True
+            return
+
+        #initialize stops_visited_on_walk for passengers to calculate non_preffered_dest_stop
+        next_stop = self.route.origin_stop
+        self.stops_visited_on_walk = set()
+        self.stops_visited_on_walk.add(next_stop)
+        for connection in self.walk:
+            if (connection.stop_1 == next_stop):
+                next_stop = connection.stop_2
+            else:
+                next_stop = connection.stop_1
+            self.stops_visited_on_walk.add(next_stop)
+        
+        self.visit_stop(controller, self.route.origin_stop, self.departure_time)
+        #recursively call update until we reach stop condition
+        self.update(controller, current_time)
+        
+    def update_journey(self, controller, current_time):
+        '''
+        update journey for new timestep
+        '''
+        if (len(self.walk) == 0):
+            self.done = True
+            return
+        
+        #get next connection and next stop
+        next_connection = self.walk[0]
+        if (next_connection.stop_1 == self.current_stop):
+            next_stop = next_connection.stop_2
+        else:
+            next_stop = next_connection.stop_1
+        
+        if (current_time - self.time_at_last_stop >= next_connection.time):
+            self.visit_stop(next_stop, controller, self.time_at_last_stop + next_connection.time)
+            self.walk.pop[0]
+            self.update(controller, current_time)
+        else:
+            #interpolate lat and lon
+            self.lat = (next_stop.lat - self.current_stop.lat)*((current_time - self.time_at_last_stop)/next_connection.time)
+            self.lon = (next_stop.lon - self.current_stop.lon)*((current_time - self.time_at_last_stop)/next_connection.time)
+
+    def visit_stop(self, controller, stop, time):
+        '''
+        visit the given stop at the given time
+        '''
+        for passenger in self.passengers:
+            passenger.visit_stop(stop)
+        for passenger in stop.passengers:
+            if (len(self.passengers) > self.capacity):
+                break
+            if (passenger.route == self.route):
+                stop.passengers.remove(passenger)
+                passenger.depart(self)
+        self.lat = stop.lat
+        self.lon = stop.lon
+        self.time_at_last_stop = time
+        self.current_stop = stop
+
 
 
 class Network():
@@ -99,9 +234,24 @@ class Network():
         self.add_route(427)
         self.add_route(428)
         self.add_route(432)
+        self.init_buses()
+        self.init_passengers()
 
-        #cache elevations to save expensive call
         cache_elevations()
+    
+    def init_passengers(self):
+        '''
+        initialize passengers
+        get all relevant passengers and add them to their respective stop queues
+        shuffle all stop queues
+        '''
+        pass
+    
+    def init_buses(self):
+        '''
+        initialize buses and give them their appropriate departure times and routes
+        '''
+        pass
         
     
     def init_stops(self):

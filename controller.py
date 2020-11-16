@@ -17,6 +17,7 @@ class NetworkController():
         self.max_time_per_walk = self.get_max_time_per_walk()
 
         #dict mapping routes to the last calculated optimal walk
+        self.shortest_paths = self.init_shortest_paths()
         self.prev_optimal_walks = dict()
         self.init_walks()
     
@@ -24,16 +25,11 @@ class NetworkController():
         '''
         get the maximum time per trip before pruning from search tree
         '''
-        # time_sum = 0
-        # for connection in self.network.connections:
-        #     time_sum += connection.time
-        # return time_sum*2
         return 37*60
 
     def update(self):
         self.current_time += self.seconds_per_tick
         self.current_water_level = self.get_water_level_for_time(self.current_time)
-        # self.current_water_level += (self.end_water_level - self.start_water_level) / (self.end_time / self.seconds_per_tick)
         # self.update_stops()
         # self.update_connections()
         self.update_routes()
@@ -80,6 +76,53 @@ class NetworkController():
     def is_complete(self):
         return self.current_time >= self.end_time
     
+    def init_shortest_paths(self):
+        '''
+        find shortest paths between all stops using djikstras
+        '''
+        #min_dist[stop_1][stop_2] is the minimum time connecting stop_1 to stop_2 
+        STOP = 0
+        TIME = 1
+        INF = 10e8
+        min_dist = dict()
+
+        for main_stop in self.network.stops:
+            #nodes take the form [stop, time]
+            open_nodes = [[main_stop, 0]]
+            visited_stops = set()
+            main_stop_min_dist = dict()
+
+            #initlialize open nodes
+            for stop in self.network.stops:
+                if (stop != main_stop):
+                    open_nodes.append([stop, INF])
+                open_nodes.sort(key=lambda x: x[TIME])
+
+            #main search loop
+            while(len(open_nodes) > 0):
+                current_node = open_nodes.pop(0)
+                
+                for connection in self.network.get_connections_for_stop(current_node[STOP]):
+                    if (current_node[STOP] == connection.stop_1):
+                        next_stop = connection.stop_2
+                    else:
+                        next_stop = connection.stop_1
+                    
+                    if (next_stop in visited_stops):
+                        continue
+                    
+                    next_time = current_node[TIME] + connection.time
+                    for node in open_nodes:
+                        if node[STOP] == next_stop:
+                            node[TIME] = min(next_time, node[TIME])
+                            break
+                main_stop_min_dist[current_node[STOP]] = current_node[TIME]
+                visited_stops.add(current_node[STOP])
+                open_nodes.sort(key=lambda x: x[TIME])
+            min_dist[main_stop] = main_stop_min_dist
+        return min_dist
+    
+
     def init_walks(self):
         '''
         find the initial walks
@@ -106,15 +149,17 @@ class NetworkController():
             return None
 
 
-    def optimal_walk_search(self, route, time):
+    def optimal_walk_search(self, route, time, trail=False):
         '''
         search for the optimum walk for the given route starting at the given timestep
+        if trail is true, do not allow repeated edges
         TODO:
             run dikstras to find shortest route between all points
             add heruistic - time from current stop to furthest unvisited required stop
             add to pruning - current time + heuristic > max time?
             tune max time - initial time for each route + 10 minutes
             go through and check that everything is running snappy (probs isn't too bad since paths are fine)
+            remove duplicates - same visited required stops and same current stop
             
             if this still isn't enough, require that indooroopilly is the final stop
                 heuristic = time to furthest univisited required stop + time from that stop to
@@ -124,8 +169,9 @@ class NetworkController():
         CURRENT_STOP=0
         TIME=1
         WALK=2
+        HEURISTIC=3
         #nodes take the form [current_stop, current_time, stops_visited_in_order (first to last)]
-        root_node = [self.network.chancellors_place, time, []]
+        root_node = [self.network.chancellors_place, time, [], time + self.get_heuristic(route, [], self.network.chancellors_place)]
         node_list = [root_node]
 
         while(len(node_list) > 0):
@@ -144,8 +190,8 @@ class NetworkController():
                 else:
                     next_stop = connection.stop_1
                 
-                # if (connection in node[WALK]):
-                #     continue
+                if (trail and (connection in node[WALK])):
+                    continue
                 
                 #check the step is valid, get next time and check if time is over max
                 valid, next_time = self.is_step_valid(prev_stop, next_stop, connection, node[TIME])
@@ -159,17 +205,30 @@ class NetworkController():
                     # print('subopt')
                     continue
                 
+                next_node = [next_stop, next_time, next_walk, next_time + self.get_heuristic(route, next_walk, next_stop)]
+                if (next_node[HEURISTIC] - time > self.max_time_per_walk):
+                    continue
+                
                 #append new node to open list
-                node_list.append([next_stop, next_time, next_walk])
-            node_list.sort(key=lambda x: x[TIME])
-            # print(len(node_list))
-            # if (len(node_list) > 10):
-            #     for node in node_list:
-            #         print(f'{node[TIME]}')
-            #         for stop in node[WALK]:
-            #             print(f'\t{stop.id}')
-            #     exit(0)
+                node_list.append(next_node)
+            node_list.sort(key=lambda x: x[HEURISTIC])
         return None
+
+    def get_heuristic(self, route, walk, current_stop):
+        '''
+        return time plus heuristic for A*
+        heuristic is minumum time to the furthest unvisited stop in route.required_stops
+        '''
+        max_time = 0
+        walk_stops = set()
+        for connection in walk:
+            walk_stops.add(connection.stop_1)
+            walk_stops.add(connection.stop_2)
+        for stop in route.required_stops:
+            if (not (stop in walk_stops)):
+                max_time = max(max_time, self.shortest_paths[current_stop][stop])
+        return max_time
+
     
     def is_walk_suboptimal(self, walk, connection):
         '''
@@ -198,15 +257,25 @@ class NetworkController():
         '''
         test if a walk is valid starting at the given time
         '''
-        #REPLACE WITH CONNECTION
+        #PREV CODE FOR STOP BASED WALK
         # for connection in walk):
         #     # connection = self.network.get_connection(walk[i-1], walk[i])
         #     valid, time = self.is_step_valid(walk[i-1], walk[i], connection, time)
         #     if ((not valid) or (time > self.max_time_per_walk)):
         #         return False
+        next_stop = self.network.chancellors_place
+        for connection in walk:
+            prev_stop = next_stop
+            if (connection.stop_1 == prev_stop):
+                next_stop = connection.stop_2
+            else:
+                next_stop = connection.stop_1
+            valid, time = self.is_step_valid(prev_stop, next_stop, connection, time)
+            if ((not valid) or (time > self.max_time_per_walk)):
+                return False
         return True
+            
     
-
     def is_step_valid(self, start_stop, end_stop, connection, time):
         '''
         returns True and the new time if the step from one stop to another is valid
@@ -224,4 +293,4 @@ class NetworkController():
 
     def get_water_level_for_time(self, time):
         water_level_diff = ((self.end_water_level - self.start_water_level) / (self.end_time)) * time
-        return water_level_diff + self.start_water_level
+        return min(water_level_diff + self.start_water_level, self.end_water_level)
