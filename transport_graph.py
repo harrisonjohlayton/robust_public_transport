@@ -112,7 +112,7 @@ class Passenger():
 
 class Bus():
     
-    def __init__(self, route, departure_time):
+    def __init__(self, route, departure_time, disaster_resistant=False):
         self.route = route
         self.departure_time = departure_time
         self.passengers = []
@@ -210,6 +210,12 @@ class Bus():
             passenger.visit_stop(stop)
 
         for passenger in stop.passengers.copy():
+            # if (stop == self.route.origin_stop):
+            #     if ((len(self.passengers) + 5) >= self.capacity):
+            #         break
+            # else:
+            #     if (len(self.passengers) >= self.capacity):
+            #         break
             if (len(self.passengers) >= self.capacity):
                 break
             if (passenger.route == self.route):
@@ -223,8 +229,7 @@ class Network():
     class representing the graph containing the state of the transport network.
     '''
 
-    def __init__(self, disaster_resistant=False):
-        self.disaster_resistant = disaster_resistant
+    def __init__(self):
         self.chancellors_place = Stop(1799, 'Chancellors Place', -27.497974, 153.011139)
         self.indooroopilly_interchange = Stop(2205, 'Indooroopilly Shopping Center', -27.500941, 152.971946)
         self.connections = []

@@ -2,30 +2,35 @@
 
 class NetworkController():
 
-    def __init__(self, network, distaster_resistant=False, seconds_per_tick=120):
+    def __init__(self, network, disaster_resistant=False, seconds_per_tick=120):
         self.start_water_level=0.0
         self.end_water_level=20.0
         self.current_water_level = 0.0
         
-        self.distaster_resistant = distaster_resistant
+        self.distaster_resistant = disaster_resistant
         self.network = network
 
         #start and end time in seconds
         self.end_time = 4*60*60
         self.current_time = 0
         self.seconds_per_tick = seconds_per_tick
-        self.max_time_per_walk = self.get_max_time_per_walk()
 
         #dict mapping routes to the last calculated optimal walk
+        self.get_max_time_per_walk()
         self.shortest_paths = self.init_shortest_paths()
         self.prev_optimal_walks = dict()
         self.init_walks()
+        self.cached_optimal_walks = dict()
     
     def get_max_time_per_walk(self):
         '''
         get the maximum time per trip before pruning from search tree
         '''
-        return 37*60
+        self.max_time_per_walk = dict()
+        self.max_time_per_walk[414] = 60*57#37
+        self.max_time_per_walk[427] = 60*48#28
+        self.max_time_per_walk[428] = 60*52#32
+        self.max_time_per_walk[432] = 60*47#27
 
     def update(self):
         self.current_time += self.seconds_per_tick
@@ -119,7 +124,6 @@ class NetworkController():
         find the initial walks
         '''
         for route in self.network.routes:
-            print(f'initializing route for {route.route_num}')
             self.prev_optimal_walks[route] = self.optimal_walk_search(route, 0, True)
     
     def cache_optimum_walks(self):
@@ -135,11 +139,11 @@ class NetworkController():
         prev_optimal_walk = self.prev_optimal_walks[route]
         if (prev_optimal_walk is None):
             return prev_optimal_walk
-        elif(self.is_walk_valid(prev_optimal_walk, time)):
+        elif(self.is_walk_valid(prev_optimal_walk, time, route.route_num)):
             return prev_optimal_walk
         elif (self.distaster_resistant):
             #if changing routes, search for new route and return it (None if no route exists)
-            new_optimal_walk = self.optimal_walk_search(route, time)
+            new_optimal_walk = self.optimal_walk_search(route, time, trail=True)
             self.prev_optimal_walks[route] = new_optimal_walk
             return new_optimal_walk
         else:
@@ -179,15 +183,15 @@ class NetworkController():
         node_list = [root_node]
 
         while(len(node_list) > 0):
-            # print(len(node_list[-1][WALK]))
             node = node_list.pop(0)
 
             #check if walk is complete
-            if (self.is_walk_complete(node[REQUIRED_SET], route)):
+            if (self.is_walk_complete(node[CURRENT_STOP], node[REQUIRED_SET], route)):
                 return node[WALK]
             
             #check if walk is better than last best_incomplete_walk
-            if (len(node[REQUIRED_SET]) > len(best_incomplete_node[REQUIRED_SET])):
+            if ((node[CURRENT_STOP] == self.network.indooroopilly_interchange) and 
+                (len(node[REQUIRED_SET]) > len(best_incomplete_node[REQUIRED_SET]))):
                 best_incomplete_node = node
             
             #make new node for each connection
@@ -207,7 +211,7 @@ class NetworkController():
                 
                 #check the step is valid, get next time and check if time is over max
                 valid, next_time = self.is_step_valid(prev_stop, next_stop, connection, node[TIME])
-                if ((not valid) or (next_time > self.max_time_per_walk)):
+                if ((not valid) or ((next_time-time) > self.max_time_per_walk[route.route_num])):
                     continue
                 
                 #get new walk
@@ -226,27 +230,31 @@ class NetworkController():
 
                 #prune new set if too long
                 next_node = [next_stop, next_time, next_walk, new_required_set, next_heuristic]
-                if ((next_node[HEURISTIC] - time) > self.max_time_per_walk):
+                if ((next_node[HEURISTIC] - time) > self.max_time_per_walk[route.route_num]):
                     continue
                 
                 #append new node to open list
                 node_list.append(next_node)
             node_list.sort(key=lambda x: x[HEURISTIC])
-        return None
+        if (self.distaster_resistant):
+            return best_incomplete_node[WALK]
+        else:
+            return None
 
     def get_heuristic(self, route, walk, current_stop):
         '''
         return time plus heuristic for A*
         heuristic is minumum time to the furthest unvisited stop in route.required_stops
         '''
-        max_time = 0
         walk_stops = set()
         for connection in walk:
             walk_stops.add(connection.stop_1)
             walk_stops.add(connection.stop_2)
+
+        max_time = 0
         for stop in route.required_stops:
             if (not (stop in walk_stops)):
-                max_time = max(max_time, self.shortest_paths[current_stop][stop])
+                max_time = max(max_time, self.shortest_paths[current_stop][stop] + self.shortest_paths[self.network.indooroopilly_interchange][stop])
         return max_time
     
     def get_num_required_visited(self, route, walk):
@@ -259,10 +267,9 @@ class NetworkController():
         checks to see if the walk is suboptimal given the newly added connection
         '''
         num_occurances = walk.count(connection)
-        # max_num_occurances = len(self.network.get_connections_for_stop(stop))
         return num_occurances > 2
 
-    def is_walk_complete(self, required_set, route):
+    def is_walk_complete(self, current_stop, required_set, route):
         '''
         return True if the walk contains all stops in the routes required_stops
         '''
@@ -275,15 +282,16 @@ class NetworkController():
         #         continue
         #     return False
         # return True
-        for stop in required_set:
-            if (stop in route.required_stops):
+        if (current_stop != self.network.indooroopilly_interchange):
+            return False
+        for stop in route.required_stops:
+            if (stop in required_set):
                 continue
             return False
         return True
 
 
-
-    def is_walk_valid(self, walk, time):
+    def is_walk_valid(self, walk, time, route_num):
         '''
         test if a walk is valid starting at the given time
         '''
@@ -296,7 +304,7 @@ class NetworkController():
             else:
                 next_stop = connection.stop_1
             valid, time = self.is_step_valid(prev_stop, next_stop, connection, time)
-            if ((not valid) or ((time - start_time) > self.max_time_per_walk)):
+            if ((not valid) or ((time - start_time) > self.max_time_per_walk[route_num])):
                 return False
         return True
             
