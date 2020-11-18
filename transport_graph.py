@@ -54,11 +54,12 @@ class Route():
         self.route_num=route_num
         self.origin_stop = first_stop
         self.current_route = []
-        self.required_stops = [self.origin_stop]
+        self.required_stops = set()
+        self.required_stops.add(self.origin_stop)
         self.parent_network = network
     
     def add_required_stop(self, stop):
-        self.required_stops.append(stop)
+        self.required_stops.add(stop)
     
     def __str__(self):
         return str(self.route_num)
@@ -66,15 +67,15 @@ class Route():
 
 class Passenger():
 
-    def __init__(self, route, dest_stop):
+    def __init__(self, route, dest_stop, origin_stop):
         self.route = route
         #determined in realtime
         self.bus = None
+        self.origin_stop = origin_stop
         self.dest_stop = dest_stop
         #best stop they can get to given current flooding
         self.non_preffered_dest_stop = None
 
-        self.departed = False
         self.arrived = False
         self.stop_arrived_at = None
     
@@ -102,12 +103,12 @@ class Passenger():
         if the stop is your destination, get off
         if the stop is your next best destination, get off
         '''
-        if (stop == self.dest_stop):
-            self.bus.passengers.remove(self)
+        if (stop.id == self.dest_stop.id):
             self.arrived = True
+            self.bus.passengers.remove(self)
         elif ((not(self.non_preffered_dest_stop is None)) and (stop == self.non_preffered_dest_stop)):
-            self.bus.passengers.remove(self)
             self.arrived = True
+            self.bus.passengers.remove(self)
 
 class Bus():
     
@@ -132,12 +133,11 @@ class Bus():
 
         must be able to handle the bus passing several stops in a single tick
         '''
-        pass
         if (self.done):
             return
         elif (self.departed):
             self.update_journey(controller, current_time)
-        elif (self.departure_time >= current_time):
+        elif (self.departure_time <= current_time):
             self.depart(controller, current_time)
     
     def depart(self, controller, current_time):
@@ -145,13 +145,14 @@ class Bus():
         depart the start stop
         '''
         self.departed = True
-        #shallow copy so we can alter list
-        self.walk = controller.get_optimal_walk(self.route, self.departure_time).copy()
 
-        #case where no walk is possible
+        self.walk = controller.get_optimal_walk(self.route, self.departure_time)
         if (self.walk is None):
             self.done = True
             return
+        
+        #make shallow copy
+        self.walk = self.walk.copy()
 
         #initialize stops_visited_on_walk for passengers to calculate non_preffered_dest_stop
         next_stop = self.route.origin_stop
@@ -164,7 +165,9 @@ class Bus():
                 next_stop = connection.stop_1
             self.stops_visited_on_walk.add(next_stop)
         
+        #visit first stop
         self.visit_stop(controller, self.route.origin_stop, self.departure_time)
+
         #recursively call update until we reach stop condition
         self.update(controller, current_time)
         
@@ -183,31 +186,35 @@ class Bus():
         else:
             next_stop = next_connection.stop_1
         
-        if (current_time - self.time_at_last_stop >= next_connection.time):
-            self.visit_stop(next_stop, controller, self.time_at_last_stop + next_connection.time)
-            self.walk.pop[0]
+        if ((current_time - self.time_at_last_stop) >= next_connection.time):
+            self.visit_stop(controller, next_stop, self.time_at_last_stop + next_connection.time)
+            self.walk.pop(0)
             self.update(controller, current_time)
         else:
             #interpolate lat and lon
-            self.lat = (next_stop.lat - self.current_stop.lat)*((current_time - self.time_at_last_stop)/next_connection.time)
-            self.lon = (next_stop.lon - self.current_stop.lon)*((current_time - self.time_at_last_stop)/next_connection.time)
+            fraction_complete = (current_time - self.time_at_last_stop)/next_connection.time
+            self.lat = self.current_stop.lat + (next_stop.lat - self.current_stop.lat)*(fraction_complete)
+            self.lon = self.current_stop.lon + (next_stop.lon - self.current_stop.lon)*(fraction_complete)
 
     def visit_stop(self, controller, stop, time):
         '''
         visit the given stop at the given time
         '''
-        for passenger in self.passengers:
-            passenger.visit_stop(stop)
-        for passenger in stop.passengers:
-            if (len(self.passengers) > self.capacity):
-                break
-            if (passenger.route == self.route):
-                stop.passengers.remove(passenger)
-                passenger.depart(self)
         self.lat = stop.lat
         self.lon = stop.lon
         self.time_at_last_stop = time
         self.current_stop = stop
+
+        #have all passengers on bus that need to get off, get off
+        for passenger in self.passengers.copy():
+            passenger.visit_stop(stop)
+
+        for passenger in stop.passengers.copy():
+            if (len(self.passengers) >= self.capacity):
+                break
+            if (passenger.route == self.route):
+                stop.passengers.remove(passenger)
+                passenger.depart(controller, self)
 
 
 
@@ -247,22 +254,25 @@ class Network():
         get all relevant passengers and add them to their respective stop queues
         shuffle all stop queues
         '''
-        stop_id_set = set()
-        for stop in self.stops:
-            stop_id_set.add(stop.id)
+        stop_id_sets = dict()
+        for route in self.routes:
+            next_stop_set = set()
+            for stop in route.required_stops:
+                next_stop_set.add(stop.id)
+            stop_id_sets[route.route_num] = next_stop_set
 
-        passenger_numbers = read_trips_file(stop_id_set, self.chancellors_place.id, self.indooroopilly_interchange.id)
+        passenger_numbers = read_trips_file(stop_id_sets, self.chancellors_place.id, self.indooroopilly_interchange.id)
         for route_num in passenger_numbers.keys():
             route = self.get_route(route_num)
             for origin_stop_id in passenger_numbers[route_num].keys():
-                origin_stop = self.get_stop(origin_stop)
-                for dest_stop_id in passenger_numbers[route_num][origin_stop].keys():
-                    destination_stop = self.get_stop(destination_stop)
+                origin_stop = self.get_stop(origin_stop_id)
+                for dest_stop_id in passenger_numbers[route_num][origin_stop_id].keys():
+                    destination_stop = self.get_stop(dest_stop_id)
                     no_passengers = passenger_numbers[route_num][origin_stop_id][dest_stop_id]
 
                     for i in range(no_passengers):
                         #add the passengers to the origin_stop
-                        next_passenger = Passenger(route, destination_stop)
+                        next_passenger = Passenger(route, destination_stop, origin_stop)
                         origin_stop.passengers.append(next_passenger)
                         self.passengers.append(next_passenger)
     
@@ -273,7 +283,7 @@ class Network():
         departures = read_departure_times()
         for departure in departures:
             route = self.get_route(departure[0])
-            self.buses.append(route, departure[1])
+            self.buses.append(Bus(route, departure[1]))
         
     
     def init_stops(self):

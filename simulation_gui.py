@@ -1,5 +1,7 @@
 import tkinter as tk
 import math
+
+from tkinter.font import Font
 from transport_graph import Network, Stop, Connection
 
 CONNECTION_WIDTH = 2
@@ -7,14 +9,17 @@ CONNECTION_UP_COLOR = '#090'
 CONNECTION_DOWN_COLOR = '#900'
 
 STOP_RADIUS = 20
-STOP_WIDTH = 20
+STOP_WIDTH = 25
 STOP_HEIGHT = 8
 STOP_FONT_SIZE = 8
 STOP_COLOR = '#00f'
-START_STOP_COLOR = '#990'
-END_STOP_COLOR = '#099'
+START_STOP_COLOR = '#099'
+END_STOP_COLOR = '#990'
 STOP_TEXT_COLOR = 'white'
 STOP_DOWN_COLOR = '#900'
+
+BUS_WIDTH=10
+BUS_COLOR='#ff0'
 
 
 class SimulationGUI:
@@ -30,6 +35,7 @@ class SimulationGUI:
         #dictionary to hold UI elements
         self.stop_dict = dict()
         self.connection_dict = dict()
+        self.bus_dict = dict()
 
         #setup canvas and draw initial shapes
         self.setup_canvas()
@@ -47,6 +53,12 @@ class SimulationGUI:
         self.canvas = tk.Canvas(self.window)
         self.canvas.configure(bg="black")
         self.canvas.pack(fill="both", expand=True)
+
+        #setup time
+        time_font = Font(size=20)
+        self.time_stamp = self.canvas.create_text(self.width/2, self.height*0.1, text='3:00:00 PM', fill="#fff", font=time_font)
+        #setup water level
+        self.water_level_indicator = self.canvas.create_text(self.width/2, self.height*0.15, text='water level: 0.0m', fill='#fff',font=time_font)
     
         # setup connections and add to dict
         for connection in self.network.connections:
@@ -67,7 +79,10 @@ class SimulationGUI:
             next_y = self.lat_to_y(stop.lat)
             next_stop_shape = self.canvas.create_rectangle(next_x - STOP_WIDTH,
                     next_y - STOP_HEIGHT, next_x + STOP_WIDTH, next_y + STOP_HEIGHT, fill=STOP_COLOR) 
-            next_stop_text = self.canvas.create_text(next_x, next_y, text=str(stop), fill=STOP_TEXT_COLOR)
+            if (stop.id < 0):
+                next_stop_text = self.canvas.create_text(next_x, next_y, text='DETOUR', fill=STOP_TEXT_COLOR)
+            else:
+                next_stop_text = self.canvas.create_text(next_x, next_y, text=str(stop), fill=STOP_TEXT_COLOR)
             self.stop_dict[stop] = [next_stop_shape, next_stop_text]
         #setup start stop
         next_x = self.lon_to_x(self.network.chancellors_place.lon)
@@ -83,11 +98,6 @@ class SimulationGUI:
                 next_y - STOP_RADIUS, next_x + STOP_RADIUS, next_y + STOP_RADIUS, fill=END_STOP_COLOR) 
         next_stop_text = self.canvas.create_text(next_x, next_y, text=str(self.network.indooroopilly_interchange), fill=STOP_TEXT_COLOR)
         self.stop_dict[self.network.indooroopilly_interchange] = [next_stop_shape, next_stop_text]
-
-
-
-    
-    # def draw_network(self):
 
     
     def get_lat_long_constants(self):
@@ -110,6 +120,15 @@ class SimulationGUI:
         self.lat_offset = lat_min
         self.lon_offset = lon_min
     
+    def get_hours_minutes_seconds(self, time):
+        seconds = time%60
+        time = (time - seconds)/60
+        minutes = time % 60
+        time = (time - minutes)/60
+        hours = 3 + time
+
+        return int(hours), int(minutes), int(seconds)
+    
     def lon_to_x(self, lon):
         '''
         convert from longitude to x position in graph
@@ -122,14 +141,26 @@ class SimulationGUI:
         '''
         return math.floor(self.height - self.buffer - ((lat - self.lat_offset)*self.lat_lon_scalar))
     
-    def update(self, current_water_level):
+    def update(self, current_water_level, current_time):
         '''
         update the view to reflect the new graph
         '''
         self.update_stops(current_water_level)
         self.update_connections(current_water_level)
         self.update_buses()
+        self.update_text(current_time, current_water_level)
         self.canvas.update()
+
+    def update_text(self, current_time, current_water_level):
+        '''
+        update time stamp and water level
+        '''
+        hours, minutes, seconds = self.get_hours_minutes_seconds(current_time)
+        time_string = "{:01d}:{:02d}:{:02d} PM".format(hours, minutes, seconds)
+        self.canvas.itemconfig(self.time_stamp, text=time_string)
+
+        water_level_text = "water level: {:02.1f}m".format(current_water_level)
+        self.canvas.itemconfig(self.water_level_indicator, text=water_level_text)
     
     def update_stops(self, current_water_level):
         '''
@@ -141,9 +172,10 @@ class SimulationGUI:
     def update_stop(self, stop, current_water_level):
         #if stop is above water and at least one connection is above water, return
         if stop.elevation > current_water_level:
-            for connection in self.network.get_connections_for_stop(stop):
-                if connection.elevation > current_water_level:
-                    return
+            return
+            # for connection in self.network.get_connections_for_stop(stop):
+            #     if connection.elevation > current_water_level:
+            #         return
         rect = self.stop_dict[stop][0]
         self.canvas.itemconfig(rect, fill=STOP_DOWN_COLOR)
 
@@ -158,15 +190,36 @@ class SimulationGUI:
                     (connection.elevation <= current_water_level)):
                 line = self.connection_dict[connection]
                 self.canvas.itemconfig(line, fill=CONNECTION_DOWN_COLOR, dash=(5,5))
-                
-
 
     def update_buses(self):
         '''
         update buses for new tick
         '''
-        pass
-
+        # print(f'WIDTH : {self.width}\t\tHEIGHT : {self.height}')
+        for bus in self.network.buses:
+            if (bus.done):
+                if (bus in self.bus_dict.keys()):
+                    rect = self.bus_dict[bus]
+                    self.canvas.delete(rect)
+                    self.bus_dict.pop(bus, None)
+            elif (bus.departed):
+                #bus in progress
+                if (bus in self.bus_dict.keys()):
+                    #update bus
+                    next_x = self.lon_to_x(bus.lon)
+                    next_y = self.lat_to_y(bus.lat)
+                    rect = self.bus_dict[bus]
+                    self.canvas.coords(rect, next_x - BUS_WIDTH, next_y - BUS_WIDTH,
+                        next_x + BUS_WIDTH, next_y + BUS_WIDTH)
+                else:
+                    #create new bus
+                    next_x = self.lon_to_x(bus.lon)
+                    next_y = self.lat_to_y(bus.lat)
+                    rect = self.canvas.create_oval(next_x - BUS_WIDTH,
+                            next_y - BUS_WIDTH, next_x + BUS_WIDTH, next_y + BUS_WIDTH, fill=BUS_COLOR) 
+                    self.bus_dict[bus] = rect
+                # print(f'{bus.lon} : {next_x}\t\t{bus.lat} : {next_y}')
+                # print(f'{next_x}, {next_y}')
 
     
     # def start_simulation(self):

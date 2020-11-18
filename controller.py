@@ -2,10 +2,10 @@
 
 class NetworkController():
 
-    def __init__(self, network, distaster_resistant=False, start_water_level=0.0, end_water_level=20.0, seconds_per_tick=120):
-        self.start_water_level=start_water_level
-        self.end_water_level=end_water_level
-        self.current_water_level = start_water_level
+    def __init__(self, network, distaster_resistant=False, seconds_per_tick=120):
+        self.start_water_level=0.0
+        self.end_water_level=20.0
+        self.current_water_level = 0.0
         
         self.distaster_resistant = distaster_resistant
         self.network = network
@@ -30,49 +30,8 @@ class NetworkController():
     def update(self):
         self.current_time += self.seconds_per_tick
         self.current_water_level = self.get_water_level_for_time(self.current_time)
-        # self.update_stops()
-        # self.update_connections()
         self.update_buses()
-        self.print_stats()
-        print(f'TIME: {self.current_time} / {self.end_time}\nWATER:{self.current_water_level}m')
-    
-    # def update_stops(self):
-    #     '''
-    #     update stops for new tick
-    #     '''
-    #     for stop in self.network.stops:
-    #         if (stop.elevation < self.current_water_level):
-    #             stop.is_flooded = True
-    
-    # def update_connections(self):
-    #     '''
-    #     update connections for new tick
-    #     '''
-    #     for connection in self.network.connections:
-    #         if (connection.elevation < self.current_water_level):
-    #             connection.is_flooded = True
-    #         elif(connection.stop_1.is_flooded or connection.stop_2.is_flooded):
-    #             connection.is_flooded = True
-
-    def print_stats(self):
-        print('\n\n')
-        total_passengers = len(self.network.passengers)
-        stranded_passengers = 0
-        non_prefferred_passengers = 0
-        non_prefferred_distance = 0
-        for passenger in self.network.passengers:
-            if (not(passenger.departed)):
-                stranded_passengers += 1
-            elif (not (passenger.non_preffered_dest_stop is None)):
-                non_prefferred_passengers += 1
-                non_prefferred_distance += self.shortest_paths[passenger.non_preffered_dest_stop][passenger.dest_stop]
-        print(f'Total passengers:\t{total_passengers}')
-        print(f'Passengers stranded:\t{stranded_passengers}')
-        if (non_prefferred_passengers == 0):
-            print(f'\tAll passengers arrived at their desired stop')
-        else:
-            print(f'\t{non_prefferred_passengers} passengers got off an average of {non_prefferred_distance/(non_prefferred_passengers*60)} minutes drive from their prefferred stop')
-
+        # print(f'TIME: {self.current_time} / {self.end_time}\nWATER:{self.current_water_level}m')
     
     def update_buses(self):
         '''
@@ -82,11 +41,31 @@ class NetworkController():
             bus.update(self, self.current_time)
     
     def is_complete(self):
-        if (self.current_time >= self.end_time):
-            for bus in self.network.buses:
-                if (not bus.done):
-                    return False
+        for bus in self.network.buses:
+            if (not bus.done):
+                return False
+        #its complete
+        self.print_stats()
+        self.cache_optimum_walks
         return True
+
+    def print_stats(self):
+        print('\n\n')
+        total_passengers = len(self.network.passengers)
+        stranded_passengers = 0
+        non_prefferred_passengers = 0
+        non_prefferred_distance = 0
+        for passenger in self.network.passengers:
+            if (not(passenger.arrived)):
+                stranded_passengers += 1
+            elif (not (passenger.non_preffered_dest_stop is None)):
+                non_prefferred_passengers += 1
+                non_prefferred_distance += self.shortest_paths[passenger.non_preffered_dest_stop][passenger.dest_stop]
+        print(f'{total_passengers - stranded_passengers - non_prefferred_passengers} passengers arrived at their destination')
+        print(f'{stranded_passengers} passengers were stranded at their initial stop')
+        if (non_prefferred_passengers != 0):
+            print(f'{non_prefferred_passengers} arrived at a non-preffered stop only {non_prefferred_distance/(non_prefferred_passengers*60)} minutes drive from their prefferred stop')
+        print('\n\n')
     
     def init_shortest_paths(self):
         '''
@@ -142,13 +121,21 @@ class NetworkController():
         for route in self.network.routes:
             print(f'initializing route for {route.route_num}')
             self.prev_optimal_walks[route] = self.optimal_walk_search(route, 0, True)
+    
+    def cache_optimum_walks(self):
+        '''
+        cache the optimum walks
+        '''
+        pass
 
     def get_optimal_walk(self, route, time):
         '''
         return the optimum walk for the given route starting at the given timestep
         '''
         prev_optimal_walk = self.prev_optimal_walks[route]
-        if ((prev_optimal_walk is None) or self.is_walk_valid(prev_optimal_walk, time)):
+        if (prev_optimal_walk is None):
+            return prev_optimal_walk
+        elif(self.is_walk_valid(prev_optimal_walk, time)):
             return prev_optimal_walk
         elif (self.distaster_resistant):
             #if changing routes, search for new route and return it (None if no route exists)
@@ -182,9 +169,13 @@ class NetworkController():
         CURRENT_STOP=0
         TIME=1
         WALK=2
-        HEURISTIC=3
+        REQUIRED_SET=3
+        HEURISTIC=4
         #nodes take the form [current_stop, current_time, stops_visited_in_order (first to last)]
-        root_node = [self.network.chancellors_place, time, [], time + self.get_heuristic(route, [], self.network.chancellors_place)]
+        root_node_set = set()
+        root_node_set.add(self.network.chancellors_place)
+        root_node = [self.network.chancellors_place, time, [], root_node_set, time + self.get_heuristic(route, [], self.network.chancellors_place)]
+        best_incomplete_node = root_node
         node_list = [root_node]
 
         while(len(node_list) > 0):
@@ -192,19 +183,27 @@ class NetworkController():
             node = node_list.pop(0)
 
             #check if walk is complete
-            if (self.is_walk_complete(node[WALK], route)):
+            if (self.is_walk_complete(node[REQUIRED_SET], route)):
                 return node[WALK]
+            
+            #check if walk is better than last best_incomplete_walk
+            if (len(node[REQUIRED_SET]) > len(best_incomplete_node[REQUIRED_SET])):
+                best_incomplete_node = node
             
             #make new node for each connection
             prev_stop = node[CURRENT_STOP]
+
             for connection in self.network.get_connections_for_stop(prev_stop):
+
+                #if looking for trail, abandon this
+                if (trail and (connection in node[WALK])):
+                    continue
+
+                #get stop
                 if (prev_stop == connection.stop_1):
                     next_stop = connection.stop_2
                 else:
                     next_stop = connection.stop_1
-                
-                if (trail and (connection in node[WALK])):
-                    continue
                 
                 #check the step is valid, get next time and check if time is over max
                 valid, next_time = self.is_step_valid(prev_stop, next_stop, connection, node[TIME])
@@ -214,12 +213,20 @@ class NetworkController():
                 #get new walk
                 next_walk = node[WALK].copy()
                 next_walk.append(connection)
+                #prune those with double crossed edges
                 if (self.is_walk_suboptimal(next_walk, connection)):
-                    # print('subopt')
                     continue
+
+                next_heuristic = next_time + self.get_heuristic(route, next_walk, next_stop)
                 
-                next_node = [next_stop, next_time, next_walk, next_time + self.get_heuristic(route, next_walk, next_stop)]
-                if (next_node[HEURISTIC] - time > self.max_time_per_walk):
+                #get new required_set
+                new_required_set = node[REQUIRED_SET].copy()
+                if ((not (next_stop in node[REQUIRED_SET])) and (next_stop in route.required_stops)):
+                    new_required_set.add(next_stop)
+
+                #prune new set if too long
+                next_node = [next_stop, next_time, next_walk, new_required_set, next_heuristic]
+                if ((next_node[HEURISTIC] - time) > self.max_time_per_walk):
                     continue
                 
                 #append new node to open list
@@ -241,41 +248,46 @@ class NetworkController():
             if (not (stop in walk_stops)):
                 max_time = max(max_time, self.shortest_paths[current_stop][stop])
         return max_time
-
     
+    def get_num_required_visited(self, route, walk):
+        '''
+        returns how many of the required stops are visited in this path
+        '''
+
     def is_walk_suboptimal(self, walk, connection):
         '''
-        checks to see if the walk is suboptimal on the given stop
+        checks to see if the walk is suboptimal given the newly added connection
         '''
         num_occurances = walk.count(connection)
         # max_num_occurances = len(self.network.get_connections_for_stop(stop))
         return num_occurances > 2
 
-    def is_walk_complete(self, walk, route):
+    def is_walk_complete(self, required_set, route):
         '''
         return True if the walk contains all stops in the routes required_stops
         '''
-        stops = []
-        for connection in walk:
-            stops.append(connection.stop_1)
-            stops.append(connection.stop_2)
-        for stop in route.required_stops:
-            if stop in stops:
+        # stops = []
+        # for connection in walk:
+        #     stops.append(connection.stop_1)
+        #     stops.append(connection.stop_2)
+        # for stop in route.required_stops:
+        #     if stop in stops:
+        #         continue
+        #     return False
+        # return True
+        for stop in required_set:
+            if (stop in route.required_stops):
                 continue
             return False
         return True
+
 
 
     def is_walk_valid(self, walk, time):
         '''
         test if a walk is valid starting at the given time
         '''
-        #PREV CODE FOR STOP BASED WALK
-        # for connection in walk):
-        #     # connection = self.network.get_connection(walk[i-1], walk[i])
-        #     valid, time = self.is_step_valid(walk[i-1], walk[i], connection, time)
-        #     if ((not valid) or (time > self.max_time_per_walk)):
-        #         return False
+        start_time = time
         next_stop = self.network.chancellors_place
         for connection in walk:
             prev_stop = next_stop
@@ -284,7 +296,7 @@ class NetworkController():
             else:
                 next_stop = connection.stop_1
             valid, time = self.is_step_valid(prev_stop, next_stop, connection, time)
-            if ((not valid) or (time > self.max_time_per_walk)):
+            if ((not valid) or ((time - start_time) > self.max_time_per_walk)):
                 return False
         return True
             

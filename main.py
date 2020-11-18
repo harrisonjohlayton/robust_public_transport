@@ -49,18 +49,29 @@ def show_sorted_elevations(network):
 
 if __name__ == '__main__':
     network = Network()
+
     # print(network)
     # input('hi')
     # show_sorted_elevations(network)
+
     gui = SimulationGUI(network)
-    controller = NetworkController(network, seconds_per_tick=360)
-    show_walks_for_routes(controller)
-    # input('Press Enter to close...')
+    controller = NetworkController(network, distaster_resistant=False, seconds_per_tick=60)
+    # show_walks_for_routes(controller)
+
     # export_stops_csv(network, 'stops.csv')
     # export_connections_csv(network, 'connections.csv')
+
+    # for i in range(10):
+    #     passenger = network.passengers[i]
+    #     print(f'route_num:{passenger.route.route_num}\tdest_stop:{passenger.dest_stop}')
+
     while (not controller.is_complete()):
         controller.update()
-        gui.update(controller.current_water_level)
-        sleep(0.5)
-    controller.print_stats()
+        gui.update(controller.current_water_level, controller.current_time)
+        sleep(0.1)
+    
+    # for passenger in network.passengers:
+    #     if (not passenger.arrived):
+    #         print(f'{passenger}\t{passenger.route.route_num}\t{passenger.origin_stop.id}\t{passenger.dest_stop.id}')
+    
     input('Press enter to exit')
