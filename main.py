@@ -62,4 +62,5 @@ if __name__ == '__main__':
         controller.update()
         gui.update(controller.current_water_level)
         sleep(0.5)
+    controller.print_stats()
     input('Press enter to exit')

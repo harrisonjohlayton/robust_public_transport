@@ -32,10 +32,9 @@ class NetworkController():
         self.current_water_level = self.get_water_level_for_time(self.current_time)
         # self.update_stops()
         # self.update_connections()
-        self.update_routes()
         self.update_buses()
-        self.update_passengers()
-        print(f'time: {self.current_time} / {self.end_time}    water:{self.current_water_level}m')
+        self.print_stats()
+        print(f'TIME: {self.current_time} / {self.end_time}\nWATER:{self.current_water_level}m')
     
     # def update_stops(self):
     #     '''
@@ -54,27 +53,40 @@ class NetworkController():
     #             connection.is_flooded = True
     #         elif(connection.stop_1.is_flooded or connection.stop_2.is_flooded):
     #             connection.is_flooded = True
+
+    def print_stats(self):
+        print('\n\n')
+        total_passengers = len(self.network.passengers)
+        stranded_passengers = 0
+        non_prefferred_passengers = 0
+        non_prefferred_distance = 0
+        for passenger in self.network.passengers:
+            if (not(passenger.departed)):
+                stranded_passengers += 1
+            elif (not (passenger.non_preffered_dest_stop is None)):
+                non_prefferred_passengers += 1
+                non_prefferred_distance += self.shortest_paths[passenger.non_preffered_dest_stop][passenger.dest_stop]
+        print(f'Total passengers:\t{total_passengers}')
+        print(f'Passengers stranded:\t{stranded_passengers}')
+        if (non_prefferred_passengers == 0):
+            print(f'\tAll passengers arrived at their desired stop')
+        else:
+            print(f'\t{non_prefferred_passengers} passengers got off an average of {non_prefferred_distance/(non_prefferred_passengers*60)} minutes drive from their prefferred stop')
+
     
     def update_buses(self):
         '''
         update current buses for new tick
         '''
-        pass
-    
-    def update_passengers(self):
-        '''
-        update passengers for new tick
-        '''
-        pass
-    
-    def update_routes(self):
-        '''
-        update routes for new tick
-        '''
-        pass
+        for bus in self.network.buses:
+            bus.update(self, self.current_time)
     
     def is_complete(self):
-        return self.current_time >= self.end_time
+        if (self.current_time >= self.end_time):
+            for bus in self.network.buses:
+                if (not bus.done):
+                    return False
+        return True
     
     def init_shortest_paths(self):
         '''
@@ -129,7 +141,7 @@ class NetworkController():
         '''
         for route in self.network.routes:
             print(f'initializing route for {route.route_num}')
-            self.prev_optimal_walks[route] = self.optimal_walk_search(route, 0)
+            self.prev_optimal_walks[route] = self.optimal_walk_search(route, 0, True)
 
     def get_optimal_walk(self, route, time):
         '''
@@ -154,16 +166,17 @@ class NetworkController():
         search for the optimum walk for the given route starting at the given timestep
         if trail is true, do not allow repeated edges
         TODO:
-            run dikstras to find shortest route between all points
-            add heruistic - time from current stop to furthest unvisited required stop
-            add to pruning - current time + heuristic > max time?
-            tune max time - initial time for each route + 10 minutes
-            go through and check that everything is running snappy (probs isn't too bad since paths are fine)
-            remove duplicates - same visited required stops and same current stop
-            
-            if this still isn't enough, require that indooroopilly is the final stop
-                heuristic = time to furthest univisited required stop + time from that stop to
-                            indooroopilly
+            FUNCTIONALITY:
+                -add the 'best option' thing
+
+            OPTIMIZING
+                tune max time - initial time for each route + 10 minutes
+                go through and check that everything is running snappy (probs isn't too bad since paths are fine)
+                remove duplicates - same visited required stops and same current stop
+                
+                if this still isn't enough, require that indooroopilly is the final stop
+                    heuristic = time to furthest univisited required stop + time from that stop to
+                                indooroopilly
         '''
         
         CURRENT_STOP=0

@@ -1,5 +1,6 @@
 import requests
 import pandas as pd
+import math
 from json.decoder import JSONDecodeError
 
 #lists containing elevation data
@@ -142,6 +143,99 @@ def read_connections_file(connections_filename='data/connections.csv'):
         connections_data.append(stop_connections)
     return connections_data
 
+def read_departure_times(departure_times_file='data/departure_times.csv'):
+    '''
+    read in the departure times and return as a list
+    '''
+    TIME_SINCE_LAST=0
+    ROUTE_NUM=2
+
+    in_fd = open(departure_times_file, 'r')
+    lines = in_fd.readlines()
+    in_fd.close()
+
+    departure_times_list = []
+
+    current_time = 0
+    for line in lines:
+        words = line.split(',')
+
+        route_num = int(words[ROUTE_NUM])
+        minutes = int(words[TIME_SINCE_LAST].split(':')[0])
+        seconds = int(words[TIME_SINCE_LAST].split(':')[1])
+        current_time += seconds + (60*minutes)
+        departure_times_list.append([route_num, current_time])
+    return departure_times_list
+
+
+def read_trips_file(stop_ids, chancellors_place_id, indooroopilly_interchange_id, trips_filename='data/trips.csv'):
+    '''
+    reads trips from file
+    assumes dest stops marked 'n/a' arrive at indooroopilly_interchange
+    multiplies the number of trips by 1.5 for worst case scenario
+    '''
+    ROUTE = 0
+    ORIGIN_STOP=2
+    DESTINATION_STOP=3
+    QUANTITY=4
+
+    #num weekdays in the month of August 2019
+    NUM_WEEKDAYS = 20
+
+    uq_chancellor_place_stops = {
+        1801: 'A',
+        1799: 'B',
+        1798: 'C',
+        1797: 'D',
+        1802: 'E',
+    }
+
+    indooroopilly_stops = {
+        2004: 'Interchange',
+        2205: 'Station Rd',
+    }
+
+    in_fd = open(trips_filename, 'r')
+    lines = in_fd.readlines()
+    in_fd.close()
+
+    #passsenger_dict[route][origin_stop][destination_stop] = no of passengers
+    passenger_dict = dict()
+    
+    for line in lines:
+        words = line.split(',')
+
+        #get route number
+        route_num = int(words[ROUTE])
+
+        #get origin stop. replace chancellors place ids with single id
+        orig_stop = int(words[ORIGIN_STOP])
+        if (orig_stop in uq_chancellor_place_stops.keys()):
+            orig_stop = chancellors_place_id
+
+        #get origin stop. replace n/a with indooroopilly interchange. replace multiple indooroopilly id's with single id
+        if (words[DESTINATION_STOP] == 'n/a'):
+            dest_stop = indooroopilly_interchange_id
+        else:
+            dest_stop = int(words[DESTINATION_STOP])
+        if (dest_stop in indooroopilly_stops.keys()):
+            dest_stop = indooroopilly_interchange_id
+        
+        #check that the trip is relevant
+        if ((dest_stop in stop_ids) and (orig_stop in stop_ids)):
+
+            #add route to dict if its not there
+            if (not(route_num in passenger_dict.keys())):
+                passenger_dict[route_num] = dict()
+            
+            if (not(orig_stop in passenger_dict[route_num].keys())):
+                passenger_dict[route_num][orig_stop] = dict()
+            
+            passenger_dict[route_num][orig_stop][dest_stop] = math.ceil((1.5*int(words[QUANTITY]))/NUM_WEEKDAYS)
+    
+    return passenger_dict
+
+        
 
 def read_route_file(route_no):
     '''

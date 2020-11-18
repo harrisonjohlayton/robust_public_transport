@@ -1,4 +1,4 @@
-from utils import get_elevation, read_route_file, read_connections_file, read_stop_file, cache_elevations
+from utils import get_elevation, read_route_file, read_connections_file, read_stop_file, cache_elevations, read_departure_times, read_trips_file
 
 CHANCELLORS_PLACE_IDS = [1798, 1799, 1801]
 INDOOROOPILLY_IDS = [2004, 2205]
@@ -115,7 +115,7 @@ class Bus():
         self.route = route
         self.departure_time = departure_time
         self.passengers = []
-        self.capacity = 50
+        self.capacity = 62
 
         self.walk = None
         self.stops_visited_on_walk = None
@@ -223,6 +223,8 @@ class Network():
         self.connections = []
         self.routes = []
         self.stops = [self.indooroopilly_interchange, self.chancellors_place]
+        self.buses = []
+        self.passengers = []
 
         #caching for efficiency
         self.stop_connections = dict()
@@ -245,13 +247,33 @@ class Network():
         get all relevant passengers and add them to their respective stop queues
         shuffle all stop queues
         '''
-        pass
+        stop_id_set = set()
+        for stop in self.stops:
+            stop_id_set.add(stop.id)
+
+        passenger_numbers = read_trips_file(stop_id_set, self.chancellors_place.id, self.indooroopilly_interchange.id)
+        for route_num in passenger_numbers.keys():
+            route = self.get_route(route_num)
+            for origin_stop_id in passenger_numbers[route_num].keys():
+                origin_stop = self.get_stop(origin_stop)
+                for dest_stop_id in passenger_numbers[route_num][origin_stop].keys():
+                    destination_stop = self.get_stop(destination_stop)
+                    no_passengers = passenger_numbers[route_num][origin_stop_id][dest_stop_id]
+
+                    for i in range(no_passengers):
+                        #add the passengers to the origin_stop
+                        next_passenger = Passenger(route, destination_stop)
+                        origin_stop.passengers.append(next_passenger)
+                        self.passengers.append(next_passenger)
     
     def init_buses(self):
         '''
         initialize buses and give them their appropriate departure times and routes
         '''
-        pass
+        departures = read_departure_times()
+        for departure in departures:
+            route = self.get_route(departure[0])
+            self.buses.append(route, departure[1])
         
     
     def init_stops(self):
@@ -304,6 +326,16 @@ class Network():
             if stop.id == id:
                 return stop
         print(f'No stop with id: {id}')
+        return None
+    
+    def get_route(self, route_num):
+        '''
+        return route with the given route nubmer of NOne if no such route exists
+        '''
+        for route in self.routes:
+            if (route.route_num == route_num):
+                return route
+        print(f'No route with number: {route_num}')
         return None
     
     def is_connected(self, stop_1, stop_2):
