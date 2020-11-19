@@ -37,7 +37,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     network = Network(disaster_resistant=args.disaster_resistant)
     gui = SimulationGUI(network)
-    controller = NetworkController(network, disaster_resistant=args.disaster_resistant, seconds_per_tick=60)
+    controller = NetworkController(network, disaster_resistant=args.disaster_resistant, seconds_per_tick=5)
 
     input('Press enter to start...')
     while (not controller.is_complete()):
