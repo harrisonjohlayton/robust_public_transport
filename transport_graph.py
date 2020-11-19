@@ -229,7 +229,8 @@ class Network():
     class representing the graph containing the state of the transport network.
     '''
 
-    def __init__(self):
+    def __init__(self, disaster_resistant=False):
+        self.disaster_resistant = disaster_resistant
         self.chancellors_place = Stop(1799, 'Chancellors Place', -27.497974, 153.011139)
         self.indooroopilly_interchange = Stop(2205, 'Indooroopilly Shopping Center', -27.500941, 152.971946)
         self.connections = []
@@ -297,6 +298,8 @@ class Network():
         '''
         stops_data = read_stop_file()
         for stop_data in stops_data:
+            if ((not self.disaster_resistant) and stop_data['id'] < 0):
+                continue
             self.stops.append(Stop(stop_data['id'], stop_data['name'], stop_data['lat'], stop_data['lon']))
     
     def init_connections(self):
@@ -306,8 +309,12 @@ class Network():
         connections_data = read_connections_file()
         for connection_data in connections_data:
             stop_1 = self.get_stop(connection_data[0])
+            if (stop_1 is None):
+                continue
             for i in range(1, len(connection_data)):
                 stop_2 = self.get_stop(connection_data[i][0])
+                if (stop_2 is None):
+                    continue
                 if (self.is_connected(stop_1, stop_2)):
                     #don't load connections twice
                     continue

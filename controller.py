@@ -27,10 +27,10 @@ class NetworkController():
         get the maximum time per trip before pruning from search tree
         '''
         self.max_time_per_walk = dict()
-        self.max_time_per_walk[414] = 60*57#37
-        self.max_time_per_walk[427] = 60*48#28
-        self.max_time_per_walk[428] = 60*52#32
-        self.max_time_per_walk[432] = 60*47#27
+        self.max_time_per_walk[414] = 60*47#37
+        self.max_time_per_walk[427] = 60*38#28
+        self.max_time_per_walk[428] = 60*42#32
+        self.max_time_per_walk[432] = 60*37#27
 
     def update(self):
         self.current_time += self.seconds_per_tick
@@ -246,16 +246,17 @@ class NetworkController():
         return time plus heuristic for A*
         heuristic is minumum time to the furthest unvisited stop in route.required_stops
         '''
-        walk_stops = set()
-        for connection in walk:
-            walk_stops.add(connection.stop_1)
-            walk_stops.add(connection.stop_2)
+        # walk_stops = set()
+        # for connection in walk:
+        #     walk_stops.add(connection.stop_1)
+        #     walk_stops.add(connection.stop_2)
 
-        max_time = 0
-        for stop in route.required_stops:
-            if (not (stop in walk_stops)):
-                max_time = max(max_time, self.shortest_paths[current_stop][stop] + self.shortest_paths[self.network.indooroopilly_interchange][stop])
-        return max_time
+        # max_time = 0
+        # for stop in route.required_stops:
+        #     if (not (stop in walk_stops)):
+                # max_time = max(max_time, self.shortest_paths[current_stop][stop] + self.shortest_paths[self.network.indooroopilly_interchange][stop])
+        # return max_time
+        return self.shortest_paths[self.network.indooroopilly_interchange][current_stop]
     
     def get_num_required_visited(self, route, walk):
         '''

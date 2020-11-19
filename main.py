@@ -35,10 +35,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--disaster_resistant', help='disaster resistant?', action='store_true')
     args = parser.parse_args()
-    network = Network()
+    network = Network(disaster_resistant=args.disaster_resistant)
     gui = SimulationGUI(network)
-    controller = NetworkController(network, disaster_resistant=args.disaster_resistant, seconds_per_tick=120)
+    controller = NetworkController(network, disaster_resistant=args.disaster_resistant, seconds_per_tick=60)
 
+    input('Press enter to start...')
     while (not controller.is_complete()):
         controller.update()
         gui.update(controller.current_water_level, controller.current_time)
