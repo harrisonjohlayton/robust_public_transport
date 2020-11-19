@@ -16,7 +16,6 @@ class Stop():
         self.elevation = get_elevation(lat, lon, True, self.id, None)
         self.people = []
         self.passengers = []
-        # self.is_flooded = False
     
     def __str__(self):
         return str(f'{self.id}')
@@ -36,7 +35,6 @@ class Connection():
             (stop_1.lon + stop_2.lon)/2, False, stop_1.id, stop_2.id)
 
         self.time=time
-        # self.is_flooded = False
 
     def __str__(self):
         return f'{self.stop_1} <- {self.time}s -> {self.stop_2}'
@@ -210,12 +208,6 @@ class Bus():
             passenger.visit_stop(stop)
 
         for passenger in stop.passengers.copy():
-            # if (stop == self.route.origin_stop):
-            #     if ((len(self.passengers) + 5) >= self.capacity):
-            #         break
-            # else:
-            #     if (len(self.passengers) >= self.capacity):
-            #         break
             if (len(self.passengers) >= self.capacity):
                 break
             if (passenger.route == self.route):

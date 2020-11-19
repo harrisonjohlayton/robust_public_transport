@@ -173,9 +173,6 @@ class SimulationGUI:
         #if stop is above water and at least one connection is above water, return
         if stop.elevation > current_water_level:
             return
-            # for connection in self.network.get_connections_for_stop(stop):
-            #     if connection.elevation > current_water_level:
-            #         return
         rect = self.stop_dict[stop][0]
         self.canvas.itemconfig(rect, fill=STOP_DOWN_COLOR)
 
@@ -195,7 +192,6 @@ class SimulationGUI:
         '''
         update buses for new tick
         '''
-        # print(f'WIDTH : {self.width}\t\tHEIGHT : {self.height}')
         for bus in self.network.buses:
             if (bus.done):
                 if (bus in self.bus_dict.keys()):
@@ -218,9 +214,4 @@ class SimulationGUI:
                     rect = self.canvas.create_oval(next_x - BUS_WIDTH,
                             next_y - BUS_WIDTH, next_x + BUS_WIDTH, next_y + BUS_WIDTH, fill=BUS_COLOR) 
                     self.bus_dict[bus] = rect
-                # print(f'{bus.lon} : {next_x}\t\t{bus.lat} : {next_y}')
-                # print(f'{next_x}, {next_y}')
-
-    
-    # def start_simulation(self):
 

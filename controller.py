@@ -36,7 +36,6 @@ class NetworkController():
         self.current_time += self.seconds_per_tick
         self.current_water_level = self.get_water_level_for_time(self.current_time)
         self.update_buses()
-        # print(f'TIME: {self.current_time} / {self.end_time}\nWATER:{self.current_water_level}m')
     
     def update_buses(self):
         '''
@@ -76,7 +75,6 @@ class NetworkController():
         '''
         find shortest paths between all stops using djikstras
         '''
-        #min_dist[stop_1][stop_2] is the minimum time connecting stop_1 to stop_2 
         STOP = 0
         TIME = 1
         INF = 10e8
@@ -246,16 +244,6 @@ class NetworkController():
         return time plus heuristic for A*
         heuristic is minumum time to the furthest unvisited stop in route.required_stops
         '''
-        # walk_stops = set()
-        # for connection in walk:
-        #     walk_stops.add(connection.stop_1)
-        #     walk_stops.add(connection.stop_2)
-
-        # max_time = 0
-        # for stop in route.required_stops:
-        #     if (not (stop in walk_stops)):
-                # max_time = max(max_time, self.shortest_paths[current_stop][stop] + self.shortest_paths[self.network.indooroopilly_interchange][stop])
-        # return max_time
         return self.shortest_paths[self.network.indooroopilly_interchange][current_stop]
     
     def get_num_required_visited(self, route, walk):
@@ -274,15 +262,6 @@ class NetworkController():
         '''
         return True if the walk contains all stops in the routes required_stops
         '''
-        # stops = []
-        # for connection in walk:
-        #     stops.append(connection.stop_1)
-        #     stops.append(connection.stop_2)
-        # for stop in route.required_stops:
-        #     if stop in stops:
-        #         continue
-        #     return False
-        # return True
         if (current_stop != self.network.indooroopilly_interchange):
             return False
         for stop in route.required_stops:
