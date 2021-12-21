@@ -1,5 +1,5 @@
 # robust_public_transport
-using graph theory to similate a robust public transport network
+using graph theory to automate the rerouting of the St Lucia bus network in the case of flooding. The current model contains Latitude, Longitude and elevation data of several bus routes and nearby roads. Various graph theory principles are used to automatically reroute buses.
 
 to run the basic simulation, run
 * python main.py
